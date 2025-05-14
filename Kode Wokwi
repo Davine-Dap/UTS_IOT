@@ -1,0 +1,112 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <time.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+const char* ssid = "Wokwi-GUEST";
+const char* password = "";
+
+const String scriptURL = "https://script.google.com/macros/s/AKfycbw1EfrXi5qZuf9_lbgZVb9u8LDMw69HO09OznfmNDauBt1WdoweyzrehwqSnX6frJJxIQ/exec";
+const int trigPin = 5;
+const int echoPin = 18;
+#define SOUND_SPEED 0.034
+#define CM_TO_INCH 0.393701
+
+long duration;
+int distanceCm;
+int distanceInch;
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("SSD1306 failed");
+    while (1);
+  }
+  delay(500);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+
+  configTime(0, 0, "pool.ntp.org");
+  Serial.println("Waiting for NTP time...");
+  struct tm timeinfo;
+  while (!getLocalTime(&timeinfo)) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nTime synchronized.");
+}
+
+void loop() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration = pulseIn(echoPin, HIGH);
+  distanceCm = duration * SOUND_SPEED / 2;
+  distanceInch = distanceCm * CM_TO_INCH;
+
+  Serial.print("Distance: ");
+  Serial.print(distanceCm);
+  Serial.print(" cm | ");
+  Serial.print(distanceInch);
+  Serial.println(" in");
+
+  display.clearDisplay();
+  display.setCursor(0, 25);
+  display.print(distanceCm);
+  display.print(" cm ");
+  display.print(distanceInch);
+  display.print(" in");
+  display.display();
+
+  String currentTime = getTimeString();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(scriptURL);
+    http.addHeader("Content-Type", "application/json");
+
+    String payload = "{\"time\": \"" + currentTime + "\", \"cm\": " + String(distanceCm) + ", \"inch\": " + String(distanceInch) + "}";
+    Serial.println("Payload being sent:");
+    Serial.println(payload);
+
+    int httpResponseCode = http.POST(payload);
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+
+    http.end();
+  }
+
+  delay(15000);
+}
+
+String getTimeString() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "N/A";
+  }
+
+  char buffer[30];
+  strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", &timeinfo); 
+  return String(buffer);
+}
