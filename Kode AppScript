@@ -1,0 +1,18 @@
+function doPost(e) {
+  try {
+    var jsonData = JSON.parse(e.postData.contents);
+    var time = jsonData.time;    
+    var cm = jsonData.cm;        
+    var inch = jsonData.inch;    
+
+    Logger.log("Received: Time=" + time + ", cm=" + cm + ", inch=" + inch);
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Sheet1");
+    sheet.appendRow([time, cm, inch]); 
+
+    return ContentService.createTextOutput(JSON.stringify({status: "success", cm: cm, inch: inch}));
+  } catch (error) {
+    Logger.log("Error: " + error.message);
+    return ContentService.createTextOutput(JSON.stringify({status: "error", message: error.message}));
+  }
+}
